@@ -5,7 +5,10 @@ import data.vector
 import data.option.basic
 import tactic
 
+import myoption
+import mylist
 import myfinset
+import myfintype
 import konig
 
 namespace graph
@@ -145,202 +148,6 @@ begin
   exact is_coloring v (sub.1 vin) w (sub.1 win) vwedgeG,
 end
 
---def list_as_fn {A : Type} : A → list A → ℕ → A
---| a [] k := a
---| a (x::xs) 0 := x
---| a (x::xs) (i+1) := list_as_fn a xs i
-
-def list_as_fn {A : Type} : A → list A → ℕ → A
-| a xs i := option.get_or_else (list.nth xs i) a
-
-lemma list_nth_le {A : Type} (a : A) (xs : list A) (i : ℕ) (h : i < xs.length)
-: option.get_or_else (list.nth xs i) a = list.nth_le xs i h
-:= begin
-  induction xs with x xs ih generalizing i h,
-  simp at h, exfalso, linarith [h],
-  induction i with i ih',
-  simp,
-  simp, simp at h, change i + 1 < _ at h, simp at h_1,
-  specialize ih i h_1, exact ih,
-end
-
-lemma list_as_fn_lt {A : Type} (a : A) (xs : list A) (i : ℕ) (h : i < xs.length)
-: list_as_fn a xs i = list.nth_le xs i h
-:= begin
-  dsimp [list_as_fn], exact list_nth_le a xs i h,
-end
-
-section
-
-instance coe_option {A B} [has_lift_t A B]: has_lift_t (option A) (option B)
-:= ⟨λ (x : option A), x.map (λ a, ↑a)⟩
-
-@[norm_cast]
-lemma coe_option_get_or_else {A B} [has_lift_t A B] (o : option A) (a : A)
-: (↑(o.get_or_else a) : B) = ((↑o : option B).get_or_else (↑a : B))
-:= begin
-  cases o, unfold_coes, simpa,
-  unfold_coes, simp,
-end
-
-@[norm_cast]
-lemma coe_list_nth {A B} [has_lift_t A B] (xs : list A) (i : ℕ)
-: (↑xs : list B).nth i = (↑(xs.nth i) : option B)
-:= begin
-  unfold_coes, simp,
-end
-
-end
-
---def vec_as_fn {A : Type} {n : ℕ} : A → vector A n → ℕ → A
---| a ⟨xs,_⟩ i := list_as_fn a xs i
-
-lemma init_length {A : Type} (xs : list A) (h : xs ≠ []) : xs.init.length = xs.length - 1
-:= begin
-  induction xs with x xs ih,
-  tauto,
-  cases xs,
-  simp [list.init],
-  simp [list.init] at ih,
-  simp [list.init], rw ih,
-end
-
-lemma init_nth {A : Type} (xs : list A) (i : ℕ) (h : i + 1 < xs.length) 
-: xs.init.nth i = xs.nth i
-:= begin
-  have hh : ∀ n (xs : list A), n = xs.length → ∀ i, i + 1 < xs.length → xs.init.nth i = xs.nth i, {
-    clear h,
-    intro n,
-    induction n with n ih,
-    intros xs hlen, cases xs, simp [list.init], simp at hlen, exfalso, linarith only [hlen],
-    intros xs hlen i h,
-    cases xs, simp at hlen, exfalso, tauto,
-    change n + 1 = xs_tl.length + 1 at hlen, simp at hlen,
-    change i + 1 < xs_tl.length + 1 at h, simp at h,
-    cases i, cases xs_tl, simp at h, exfalso, linarith only [h], simp [list.init],
-    cases xs_tl, simp at h, tauto,
-    simp [list.init],
-    set xs' : list A := (xs_tl_hd :: xs_tl_tl) with xs'eq,
-    exact ih xs' hlen i_1 h,
-  },
-  exact hh xs.length xs rfl i h,
-end
-
-lemma list_as_fn_inrange {A : Type} {a : A} (xs : list A) (i : ℕ) (h : i < xs.init.length)
-: list_as_fn a xs.init i = list_as_fn a xs i
-:= begin
-  dsimp only [list_as_fn, list.nth],
-  have h' : i + 1 < xs.length, {
-    by_cases isnil : xs = [],
-    rw isnil at h, simp [list.init] at h, linarith,
-    have hlen := init_length xs isnil,
-    have h' : i < xs.length - 1, rw ← hlen, exact h,
-    have poslen : xs.length ≠ 0, intro eqz, rw eqz at h', simp at h', linarith,
-    have poslen' : xs.length > 0, by_contradiction, push_neg at a_1,
-      have hh := eq_or_lt_of_le a_1, cases hh, tauto, linarith,
-    have hlen' : xs.init.length + 1 = xs.length,
-      cases xs.length, simp at h', exfalso, linarith,
-      simp at hlen, change _ + 1 = _ + 1, simpa,
-    linarith,
-  },
-  have h'' := init_nth xs i h',
-  rwa h'',
-end
-
-lemma rep_init_nth {X : Type} (u : ℕ → list X) (sys : ∀ k, u k = list.init (u (k + 1))) (lens : ∀ k, (u k).length = k)
-(a b c : ℕ) (h₁ : a < b) (h₂ : b ≤ c)
-: list.nth (u b) a = list.nth (u c) a
-:= begin
-  induction c with c ihc generalizing a b,
-  cases nat.eq_or_lt_of_le h₂, rw h, exfalso, linarith only [h],
-  by_cases h₃ : b = c + 1, rw h₃,
-  have h₂' : b < c + 1, {
-    change b ≤ c + 1 at h₂,
-    by_contradiction f, push_neg at f,
-    cases nat.eq_or_lt_of_le f,
-    tauto, linarith,
-  },
-  have h₂'' : b ≤ c, {
-    linarith,
-  },
-  have ineq : a + 1 < (u (c + 1)).length, {
-    rw lens (c + 1), linarith,
-  },
-  rw ←init_nth (u (c + 1)) a ineq,
-  rw ← sys c,
-  exact ihc a b h₁ h₂'',
-end
-
-@[simp] def range2 : ℕ → ℕ → list ℕ
-| _ 0 := []
-| a (b+1) := a :: range2 (a + 1) b
-
-lemma list_range2_red₀ (a b i : ℕ)
-: (range2 a (b + 1)).nth (i + 1) = (range2 (a + 1) b).nth i
-:= begin
-  dsimp only [range2], refl,
-end
-
-lemma list_range2_red₁ (a b i : ℕ)
-: (range2 a (b + i)).nth i = (range2 (a+i) b).nth 0
-:= begin
-  induction i with i ih generalizing a b,
-  refl,
-  change (range2 a ((b + i) + 1)).nth (i + 1) = _,
-  rw list_range2_red₀ a (b+i) i,
-  rw ih (a+1) b,
-  have eq : a + 1 + i = a + i + 1, linarith,
-  rw eq, refl,
-end
-
-@[simp] lemma list_range2 (a b i : ℕ) (h : i < b)
-: (range2 a b).nth i = some (a + i)
-:= begin
-  have eq : b = (b - i) + i, omega,
-  rw eq,
-  rw list_range2_red₁ a (b - i) i,
-  cases (b - i), exfalso, linarith,
-  refl,
-end
-
-@[simp] lemma list_range_length (a b : ℕ) : (range2 a b).length = b
-:= begin
-  induction b with b ihb generalizing a,
-  refl, simp, rw ihb (a + 1),
-end
-
-instance set.fintype_subtype_lt_nat (n : ℕ) : fintype {i : ℕ // i < n}
-:= set.fintype_lt_nat n
-
-def vector_list_equiv {A:Type} (n : ℕ) : vector A n ≃ {x : list A | x.length = n}
-:= ⟨(λ v, ⟨v.1, v.2⟩), (λ l, ⟨l.1, l.2⟩), begin intro x, simp, end, begin intro x, simp, end⟩
-
-def vector_list_filter_equiv {A:Type} (n : ℕ) (p : list A → Prop)
-: {x : vector A n // p x.1} ≃ {x : list A | x.length = n ∧ p x}
-:= ⟨begin rintros ⟨x,h⟩ ,
-  use x.1, simp, use x.2, exact h,
-end, begin
-  rintros ⟨x,h⟩, simp at h, use x, use h.1, use h.2,
-end, begin
-  rintros ⟨x,h⟩, simp,
-end, begin
-  rintros ⟨x,h⟩, simp,
-end⟩
-
---instance list_len_fintype {A} [fintype A] (n : ℕ) : fintype {x : list A | x.length = n}
---:= begin
-  
---end
-
-noncomputable
-instance list_sep_fintype {A:Type} [fintype A] (n : ℕ) (p : list A → Prop)
-: fintype {x : list A | x.length = n ∧ p x}
-:= begin
-  refine fintype.of_equiv {x : vector A n // p x.1} (vector_list_filter_equiv _ _),
-end
-
---set_option pp.all true
-
 -- The following theorem is an application of König's lemma, pointed
 -- out by C. St. J. A. Nash-Williams in "Infinite graphs --- a survey"
 -- (1967).
@@ -356,12 +163,8 @@ theorem can_color_countable_infinite (n : ℕ) (pos : n > 0)
 
   let zero : {i : ℕ // i < n} := ⟨0, pos⟩,
   let X := list {i : ℕ // i < n},
-  let S : ℕ → set X := λ (k : ℕ), {v : X | v.length = k ∧ graph_coloring (Gfin k) (list_as_fn zero v)},
+  let S : ℕ → set X := λ (k : ℕ), {v : X | v.length = k ∧ graph_coloring (Gfin k) (v.as_fn zero)},
   let fns := λ (k : ℕ) (v : X), v.init,
-
---  have Sfin : ∀ k, fintype (S k), { 
---    intro k, have h := list_sep_fintype n (λ v, graph_coloring (Gfin k) (list_as_fn zero v)),
---  },
 
   have sys : konig.inv_system S fns, {
     intros k x xel,
@@ -371,7 +174,7 @@ theorem can_color_countable_infinite (n : ℕ) (pos : n > 0)
       by_contradiction f, push_neg at f,
       rw f at xlen, simp at xlen, exact (nat.succ_ne_zero k).symm xlen,
     },
-    have h := init_length x nonnil,
+    have h := list.init_length_is_pred nonnil,
     rw xlen at h, simp at h, rw h, simp,
 
     intros v vel w wel hedge,
@@ -381,13 +184,13 @@ theorem can_color_countable_infinite (n : ℕ) (pos : n > 0)
     specialize coloring v vel.1 (by linarith) w wel.1 (by linarith) hedge,
     have x_nonnil : x ≠ [], intro is_nil, rw is_nil at xlen, simp at xlen, tauto,
     have xinit_len : x.init.length = k,
-      have hlen := init_length x x_nonnil, rw xlen at hlen, exact hlen,
+      have hlen := list.init_length_is_pred x_nonnil, rw xlen at hlen, exact hlen,
     have vtineq : v < x.init.length,
       rw ← xinit_len at vel, exact vel.right,
     have wtineq : w < x.init.length,
       rw ← xinit_len at wel, exact wel.right,
-    rw list_as_fn_inrange x v vtineq,
-    rw list_as_fn_inrange x w wtineq,
+    rw list.as_fn_inrange vtineq,
+    rw list.as_fn_inrange wtineq,
     exact coloring,
   },
   have nonempty : ∀ k, ∃ c, c ∈ S k, {
@@ -432,7 +235,7 @@ theorem can_color_countable_infinite (n : ℕ) (pos : n > 0)
       },
     },
     let c''' : ℕ → {x : ℕ // x < n} := λ i, ⟨c'' i, rng' i⟩,
-    let clis := (range2 0 k).map c''',
+    let clis := (list.range2 0 k).map c''',
     use clis,
     dsimp [S],
     split, {
@@ -440,9 +243,9 @@ theorem can_color_countable_infinite (n : ℕ) (pos : n > 0)
     }, {
       intros v vin w win hedge,
       dsimp [Gfin, Vfin, induced] at vin win hedge, simp at vin win,
-      dsimp [clis, list_as_fn], simp,
-      have rngv := list_range2 0 k v vin.2,
-      have rngw := list_range2 0 k w win.2,
+      dsimp [clis, list.as_fn], simp,
+      have rngv := list.range2_nth 0 k v vin.2,
+      have rngw := list.range2_nth 0 k w win.2,
       rw [rngv, rngw], simp,
       dsimp [c'', c'],
       have vkt : v < k ↔ true, tauto,
@@ -456,20 +259,20 @@ theorem can_color_countable_infinite (n : ℕ) (pos : n > 0)
   },
 
   rcases konig.weak_konig_lemma sys nonempty with ⟨u, invlim⟩,
-  use (λ v, list_as_fn 0 ↑(u (v+1)) v),
+  use (λ v, list.as_fn ↑(u (v+1)) zero v),
   have zup : (0:ℕ) = ↑zero, unfold_coes,
   split, {
     intros c cin,
     simp at cin, simp,
     rcases cin with ⟨v, vin, cdef⟩,
-    dsimp [list_as_fn] at cdef,
+    dsimp [list.as_fn] at cdef,
     rw zup at cdef,
     norm_cast at cdef, unfold_coes at cdef,
     set lu := ((list.nth (u (v + 1)) v).get_or_else zero) with lueq,
     rw ← cdef, exact lu.property,
   }, {
     intros v vin w win hedge,
-    dsimp [list_as_fn], rw zup, norm_cast, unfold_coes,
+    dsimp [list.as_fn], rw zup, norm_cast, unfold_coes,
     have rsys : ∀ k, u k = list.init (u (k + 1)), {
       intro k,
       have f := invlim k,
@@ -482,11 +285,11 @@ theorem can_color_countable_infinite (n : ℕ) (pos : n > 0)
       dsimp [S] at f, exact f.1,
     },
     let K := max (v + 1) (w + 1),
-    have liftv := rep_init_nth u rsys lens v (v + 1) K (by linarith) (le_max_left (v + 1) (w + 1)),
-    have liftw := rep_init_nth u rsys lens w (w + 1) K (by linarith) (le_max_right (v + 1) (w + 1)),
+    have liftv := list.init_rep_nth u rsys lens v (v + 1) K (by linarith) (le_max_left (v + 1) (w + 1)),
+    have liftw := list.init_rep_nth u rsys lens w (w + 1) K (by linarith) (le_max_right (v + 1) (w + 1)),
     rw [liftv, liftw],
     have uKelt := (invlim K).left,
-    dsimp [S,graph_coloring,Gfin,Vfin,list_as_fn,induced] at uKelt, simp at uKelt,
+    dsimp [S,graph_coloring,Gfin,Vfin,list.as_fn,induced] at uKelt, simp at uKelt,
     have vlt : v < v + 1 ∨ v < w + 1, left, linarith,
     have wlt : w < v + 1 ∨ w < w + 1, right, linarith,
     have uKelt' := uKelt.right v vin vlt w win wlt hedge,

@@ -9,8 +9,8 @@ open set finset
 namespace finset
 
 lemma inj_range {α} (S : finset α)
-: ∃ (f : α → ℕ), (∀ x ∈ S, f x < card S) ∧ (∀ x ∈ S, ∀ y ∈ S, f x = f y → x = y)
-:= begin
+: ∃ (f : α → ℕ), (∀ x ∈ S, f x < card S) ∧ (∀ x ∈ S, ∀ y ∈ S, f x = f y → x = y) :=
+begin
   induction S using finset.induction with x S' hasnt ih,
   use (λ y, 0), tauto,
   rcases ih with ⟨f, ih1, ih2⟩,
@@ -66,8 +66,9 @@ lemma inj_range {α} (S : finset α)
   },
 end
 
-lemma range_sup (f : ℕ → ℕ) (n m : ℕ) (him : ∀ (x : ℕ), x < n → f x < m) : (finset.image f (range n)).card ≤ m
-:= begin
+lemma range_sup (f : ℕ → ℕ) (n m : ℕ) (him : ∀ (x : ℕ), x < n → f x < m)
+: (finset.image f (range n)).card ≤ m :=
+begin
   have g : m = (range m).card, simp,
   rw g,
   have g' : image f (range n) ⊆ range m,
